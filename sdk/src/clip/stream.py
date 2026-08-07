@@ -10,6 +10,7 @@ the receiver never blocks the device, which drops frames under backpressure.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -50,7 +51,18 @@ class StreamReceiver:
         self.frames_received = 0
         self.bytes_received = 0
         self.sequence_gaps = 0
+        self.started_at: float | None = None
+        self.first_frame_at: float | None = None
+        self.last_frame_at: float | None = None
+        self.max_inter_frame_ms: float = 0.0
         self._expected_sequence: int | None = None
+
+    @property
+    def first_frame_delay_s(self) -> float | None:
+        """Seconds between STREAM_START and the first STREAM_DATA frame."""
+        if self.started_at is None or self.first_frame_at is None:
+            return None
+        return self.first_frame_at - self.started_at
 
     def feed(self, raw_frame: bytes) -> None:
         if self.error is not None or self.ended.is_set():
@@ -95,6 +107,7 @@ class StreamReceiver:
         if self.started.is_set():
             raise TransferError("received STREAM_START twice")
         self.session_id = frame.session_id
+        self.started_at = time.monotonic()
         self.started.set()
 
     def _on_data(self, frame: StreamDataFrame) -> None:
@@ -103,6 +116,14 @@ class StreamReceiver:
         if self._expected_sequence is not None and frame.sequence != self._expected_sequence:
             self.sequence_gaps += 1
         self._expected_sequence = (frame.sequence + 1) & 0xFFFF
+        now = time.monotonic()
+        if self.first_frame_at is None:
+            self.first_frame_at = now
+        elif self.last_frame_at is not None:
+            gap_ms = (now - self.last_frame_at) * 1000.0
+            if gap_ms > self.max_inter_frame_ms:
+                self.max_inter_frame_ms = gap_ms
+        self.last_frame_at = now
         self.frames_received += 1
         self.bytes_received += len(frame.payload)
         if self.on_frame is not None:

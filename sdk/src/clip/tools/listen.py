@@ -87,7 +87,13 @@ async def run(args: argparse.Namespace) -> int:
             client.transport.set_file_frame_handler(None)
             handle.close()
         reason = _END_REASONS.get(receiver.end_reason, str(receiver.end_reason))
+        first_delay = receiver.first_frame_delay_s
         print(
+            f"Ended: reason={reason} frames={receiver.frames_received} "
+            f"bytes={receiver.bytes_received} seq_gaps={receiver.sequence_gaps} "
+            f"first_frame={first_delay * 1000:.0f}ms "
+            f"max_inter_frame={receiver.max_inter_frame_ms:.0f}ms"
+            if first_delay is not None else
             f"Ended: reason={reason} frames={receiver.frames_received} "
             f"bytes={receiver.bytes_received} seq_gaps={receiver.sequence_gaps}"
         )

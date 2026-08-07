@@ -135,3 +135,33 @@ async def test_client_start_rtc_returns_session() -> None:
     await client.connect()
     assert await client.start_rtc() == SESSION
     assert transport.commands == ["AT+START=rtc"]
+
+
+def test_dispatch_is_synchronous_no_added_latency() -> None:
+    """The receiver must hand frames to the callback inside feed() — no queueing."""
+    import time
+
+    delivered: list[float] = []
+    receiver = StreamReceiver(on_frame=lambda payload: delivered.append(time.monotonic()))
+    receiver.feed(start_frame())
+    send_at = time.monotonic()
+    receiver.feed(data_frame(0))
+    assert len(delivered) == 1
+    assert delivered[0] - send_at < 0.001
+
+
+async def test_latency_stats() -> None:
+    import asyncio
+
+    receiver = StreamReceiver()
+    receiver.feed(start_frame())
+    assert receiver.first_frame_delay_s is None
+    await asyncio.sleep(0.05)
+    receiver.feed(data_frame(0))
+    await asyncio.sleep(0.02)
+    receiver.feed(data_frame(1))
+    delay = receiver.first_frame_delay_s
+    assert delay is not None and 0.04 <= delay <= 0.5
+    assert receiver.max_inter_frame_ms >= 15.0
+    assert receiver.first_frame_at is not None
+    assert receiver.last_frame_at is not None
