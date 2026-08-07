@@ -163,5 +163,7 @@ async def test_latency_stats() -> None:
     delay = receiver.first_frame_delay_s
     assert delay is not None and 0.04 <= delay <= 0.5
     assert receiver.max_inter_frame_ms >= 15.0
+    avg = receiver.avg_inter_frame_ms
+    assert avg is not None and 15.0 <= avg <= 100.0
     assert receiver.first_frame_at is not None
     assert receiver.last_frame_at is not None

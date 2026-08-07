@@ -92,6 +92,7 @@ async def run(args: argparse.Namespace) -> int:
             f"Ended: reason={reason} frames={receiver.frames_received} "
             f"bytes={receiver.bytes_received} seq_gaps={receiver.sequence_gaps} "
             f"first_frame={first_delay * 1000:.0f}ms "
+            f"avg_inter_frame={receiver.avg_inter_frame_ms:.1f}ms "
             f"max_inter_frame={receiver.max_inter_frame_ms:.0f}ms"
             if first_delay is not None else
             f"Ended: reason={reason} frames={receiver.frames_received} "

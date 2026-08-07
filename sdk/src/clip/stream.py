@@ -55,7 +55,16 @@ class StreamReceiver:
         self.first_frame_at: float | None = None
         self.last_frame_at: float | None = None
         self.max_inter_frame_ms: float = 0.0
+        self._inter_frame_sum_ms: float = 0.0
+        self._inter_frame_count: int = 0
         self._expected_sequence: int | None = None
+
+    @property
+    def avg_inter_frame_ms(self) -> float | None:
+        """Mean inter-frame arrival gap in milliseconds (nominal 20 ms)."""
+        if self._inter_frame_count == 0:
+            return None
+        return self._inter_frame_sum_ms / self._inter_frame_count
 
     @property
     def first_frame_delay_s(self) -> float | None:
@@ -121,6 +130,8 @@ class StreamReceiver:
             self.first_frame_at = now
         elif self.last_frame_at is not None:
             gap_ms = (now - self.last_frame_at) * 1000.0
+            self._inter_frame_sum_ms += gap_ms
+            self._inter_frame_count += 1
             if gap_ms > self.max_inter_frame_ms:
                 self.max_inter_frame_ms = gap_ms
         self.last_frame_at = now
