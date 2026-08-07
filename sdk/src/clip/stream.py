@@ -54,17 +54,25 @@ class StreamReceiver:
         self.started_at: float | None = None
         self.first_frame_at: float | None = None
         self.last_frame_at: float | None = None
-        self.max_inter_frame_ms: float = 0.0
-        self._inter_frame_sum_ms: float = 0.0
-        self._inter_frame_count: int = 0
+        self._inter_frame_gaps_ms: list[float] = []
         self._expected_sequence: int | None = None
 
     @property
     def avg_inter_frame_ms(self) -> float | None:
         """Mean inter-frame arrival gap in milliseconds (nominal 20 ms)."""
-        if self._inter_frame_count == 0:
+        if not self._inter_frame_gaps_ms:
             return None
-        return self._inter_frame_sum_ms / self._inter_frame_count
+        return sum(self._inter_frame_gaps_ms) / len(self._inter_frame_gaps_ms)
+
+    @property
+    def max_inter_frame_ms(self) -> float:
+        """Largest inter-frame arrival gap in milliseconds."""
+        return max(self._inter_frame_gaps_ms, default=0.0)
+
+    @property
+    def inter_frame_gaps_ms(self) -> tuple[float, ...]:
+        """All inter-frame arrival gaps in milliseconds, oldest first."""
+        return tuple(self._inter_frame_gaps_ms)
 
     @property
     def first_frame_delay_s(self) -> float | None:
@@ -129,11 +137,7 @@ class StreamReceiver:
         if self.first_frame_at is None:
             self.first_frame_at = now
         elif self.last_frame_at is not None:
-            gap_ms = (now - self.last_frame_at) * 1000.0
-            self._inter_frame_sum_ms += gap_ms
-            self._inter_frame_count += 1
-            if gap_ms > self.max_inter_frame_ms:
-                self.max_inter_frame_ms = gap_ms
+            self._inter_frame_gaps_ms.append((now - self.last_frame_at) * 1000.0)
         self.last_frame_at = now
         self.frames_received += 1
         self.bytes_received += len(frame.payload)

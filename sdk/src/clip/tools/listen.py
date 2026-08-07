@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import math
 import struct
 from pathlib import Path
 
@@ -25,6 +26,52 @@ _END_REASONS = {
     STREAM_END_TIMEOUT: "start-timeout",
     STREAM_END_DISCONNECT: "ble-disconnect",
 }
+
+_HISTOGRAM_BUCKET_MS = 50.0
+_HISTOGRAM_BAR_WIDTH = 20
+
+
+def _print_summary(receiver) -> None:
+    reason = _END_REASONS.get(receiver.end_reason, str(receiver.end_reason))
+    print(f"Ended: reason={reason}")
+    rows = [
+        ("frames", str(receiver.frames_received)),
+        ("bytes", str(receiver.bytes_received)),
+        ("seq_gaps", str(receiver.sequence_gaps)),
+    ]
+    first_delay = receiver.first_frame_delay_s
+    if first_delay is not None:
+        rows.append(("first_frame", f"{first_delay * 1000:.0f} ms"))
+        avg = receiver.avg_inter_frame_ms
+        if avg is not None:
+            rows.append(("avg_inter_frame", f"{avg:.1f} ms"))
+            rows.append(("max_inter_frame", f"{receiver.max_inter_frame_ms:.0f} ms"))
+    for name, value in rows:
+        print(f"  {name:<15} : {value}")
+    if first_delay is not None and receiver.avg_inter_frame_ms is not None:
+        _print_latency_histogram(receiver.inter_frame_gaps_ms)
+
+
+def _print_latency_histogram(gaps: tuple[float, ...]) -> None:
+    if not gaps:
+        return
+    bucket_count = max(1, math.ceil(max(gaps) / _HISTOGRAM_BUCKET_MS))
+    buckets = [0] * bucket_count
+    for gap in gaps:
+        buckets[min(int(gap // _HISTOGRAM_BUCKET_MS), bucket_count - 1)] += 1
+    labels = [
+        f"{i * _HISTOGRAM_BUCKET_MS:.0f}-{(i + 1) * _HISTOGRAM_BUCKET_MS:.0f} ms"
+        for i in range(bucket_count)
+    ]
+    width = max(len(label) for label in labels)
+    print()
+    print("Inter-frame latency distribution:")
+    for label, count in zip(labels, buckets):
+        pct = count * 100.0 / len(gaps)
+        bars = round(pct * _HISTOGRAM_BAR_WIDTH / 100.0)
+        if count and not bars:
+            bars = 1
+        print(f"  {label:>{width}} : {pct:5.1f}%  {'\u25a0' * bars}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -86,18 +133,7 @@ async def run(args: argparse.Namespace) -> int:
                 pass
             client.transport.set_file_frame_handler(None)
             handle.close()
-        reason = _END_REASONS.get(receiver.end_reason, str(receiver.end_reason))
-        first_delay = receiver.first_frame_delay_s
-        print(
-            f"Ended: reason={reason} frames={receiver.frames_received} "
-            f"bytes={receiver.bytes_received} seq_gaps={receiver.sequence_gaps} "
-            f"first_frame={first_delay * 1000:.0f}ms "
-            f"avg_inter_frame={receiver.avg_inter_frame_ms:.1f}ms "
-            f"max_inter_frame={receiver.max_inter_frame_ms:.0f}ms"
-            if first_delay is not None else
-            f"Ended: reason={reason} frames={receiver.frames_received} "
-            f"bytes={receiver.bytes_received} seq_gaps={receiver.sequence_gaps}"
-        )
+        _print_summary(receiver)
     return 0
 
 

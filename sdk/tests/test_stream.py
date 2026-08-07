@@ -165,5 +165,23 @@ async def test_latency_stats() -> None:
     assert receiver.max_inter_frame_ms >= 15.0
     avg = receiver.avg_inter_frame_ms
     assert avg is not None and 15.0 <= avg <= 100.0
+    gaps = receiver.inter_frame_gaps_ms
+    assert len(gaps) == 1 and gaps[0] >= 15.0
     assert receiver.first_frame_at is not None
     assert receiver.last_frame_at is not None
+
+
+def test_latency_histogram_output(capsys) -> None:
+    from clip.tools.listen import _print_latency_histogram
+
+    _print_latency_histogram((10.0, 20.0, 60.0, 357.0))
+    out = capsys.readouterr().out
+    assert "Inter-frame latency distribution:" in out
+    assert "0-50 ms" in out
+    assert "50-100 ms" in out
+    assert "350-400 ms" in out
+    assert "50.0%" in out
+    assert "25.0%" in out
+
+    _print_latency_histogram(())
+    assert capsys.readouterr().out == ""
