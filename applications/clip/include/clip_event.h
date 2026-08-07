@@ -66,6 +66,16 @@ int clip_post_event_sync(enum clip_event event,
                          struct clip_event_result_info *info);
 
 /**
+ * @brief Mark the next CLIP_EVENT_START as an RTC (streaming) start
+ *
+ * Call immediately before posting CLIP_EVENT_START. The flag is consumed
+ * when the START event is dequeued, so it never leaks into a later start.
+ *
+ * @param rtc true to start an RTC session, false for normal recording
+ */
+void clip_event_set_start_rtc(bool rtc);
+
+/**
  * @brief Get current device state (thread-safe)
  */
 enum clip_state clip_event_get_state(void);

@@ -237,6 +237,19 @@ UNINITIALIZED → IDLE → RECORDING → TRANSMITTING / WIFI_SYNC → IDLE. Also
 
 `transport.c` provides a unified interface over BLE (`transport_ble.c`), UDP (`transport_udp.c`), and USB CDC (`usb_cdc.c`). Auto-selects active transport (BLE priority over UDP). Max 512 bytes per packet. Separate send vs send_file_data (BLE uses FILE_DATA characteristic). `TRANSPORT_TYPE_USB` carries AT commands over the USB CDC ACM serial port.
 
+### RTC Live Streaming (`rtc_stream.c`)
+
+`AT+START=RTC` runs the mic pipeline without touching the SD card; encoded
+Opus frames go to a bounded drop-oldest queue (`CONFIG_CLIP_RTC_QUEUE_FRAMES`
+× `CONFIG_CLIP_RTC_FRAME_MAX_BYTES`). `AT+DOWNLOAD=<session>` on the active
+RTC session flushes the pre-buffer and streams `STREAM_START/DATA/END` frames
+(0x13/0x14/0x15) over the BLE FILE_DATA characteristic — BLE only, no UDP.
+Backpressure drops frames (never blocks/retries); seq gaps are normal.
+Session auto-aborts 5 s after START without DOWNLOAD, or on BLE disconnect.
+AT+PAUSE/RESUME pause/resume the stream (pause discards queued data);
+AT+MARK is rejected. The audio `data_callback` hook (audio.c) feeds the
+queue from the audio thread — callbacks there must stay O(1).
+
 ### USB Interface (`usb_cdc.c`)
 
 The device enumerates over USB (Seeed VID `0x2886`) with two classes:

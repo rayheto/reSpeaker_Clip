@@ -86,6 +86,18 @@ int ble_send(const uint8_t *data, uint16_t len);
 int ble_send_file_data(const uint8_t *data, uint16_t len);
 
 /**
+ * @brief Send one RTC stream frame as a single notification (no retry)
+ *
+ * Like ble_send_file_data() but without the retry loop: the RTC path drops
+ * frames on TX backpressure instead of blocking the realtime pipeline.
+ *
+ * @param data Data to send (one complete protocol frame)
+ * @param len Length of data
+ * @return 0 on success, negative error code on failure
+ */
+int ble_send_stream_data(const uint8_t *data, uint16_t len);
+
+/**
  * @brief Check if BLE is connected
  *
  * @return true if connected, false otherwise

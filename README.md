@@ -21,7 +21,7 @@ USB, AT-command control, and UDP file transfer.
 ## Key Features
 
 - **Audio**: PDM mic → SpeexDSP preprocessing (noise suppression / AGC / dereverb) → Opus encoding
-- **BLE**: AT-command protocol, OTA DFU (MCUmgr), GATT notifications
+- **BLE**: AT-command protocol, OTA DFU (MCUmgr), GATT notifications, RTC live audio streaming (`AT+START=RTC`)
 - **WiFi**: AP mode (`ClipAP_XXXX`) with UDP file transfer (CRC32-verified)
 - **USB**: CDC ACM serial (3rd AT channel) + MSC mass storage (SD card) + 1200-baud → DFU recovery trigger
 - **Power**: Production idle ~170µA (DCDC, SD power-gating, console off)

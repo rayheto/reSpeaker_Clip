@@ -21,6 +21,7 @@
 #include "display.h"
 #include "config.h"
 #include "clip_event.h"
+#include "rtc_stream.h"
 
 LOG_MODULE_REGISTER(ble, CONFIG_CLIP_LOG_LEVEL);
 
@@ -470,6 +471,9 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
             k_work_submit(&transfer_cancel_work);
         }
 
+        /* Tear down any RTC session — BLE is the RTC lifeline */
+        rtc_stream_ble_disconnected();
+
         /* Restart advertising via work queue */
         k_work_submit(&adv_work);
     }
@@ -888,6 +892,24 @@ int ble_send_file_data(const uint8_t *data, uint16_t len)
     } while (retry_count < max_retries);
 
     return 0;
+}
+
+int ble_send_stream_data(const uint8_t *data, uint16_t len)
+{
+    if (!ble_ctx.conn) {
+        return -ENOTCONN;
+    }
+    if (!ble_ctx.file_data_notify_enabled) {
+        return -ENOTCONN;
+    }
+
+    /* Refresh inactivity timeout on outgoing stream data */
+    ble_activity_refresh();
+
+    /* Single notification, no retry: RTC drops frames on TX backpressure
+     * instead of blocking the realtime pipeline. File Data characteristic
+     * value is at attrs[7]. */
+    return bt_gatt_notify(ble_ctx.conn, &clip_svc.attrs[7], data, len);
 }
 
 bool ble_is_connected(void)

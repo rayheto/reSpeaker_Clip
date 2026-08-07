@@ -28,6 +28,7 @@
 #include "wifi.h"
 #include "storage.h"
 #include "transfer.h"
+#include "rtc_stream.h"
 #include "usb_cdc.h"
 #include "config.h"
 
@@ -133,6 +134,12 @@ static void ota_progress_work_handler(struct k_work *work)
 
 static atomic_t g_state;
 static atomic_t g_boost_refcnt;
+
+/* RTC-start request: set by AT "START=RTC" immediately before posting
+ * CLIP_EVENT_START, captured+cleared when the START event is dequeued so it
+ * cannot leak into a later (non-RTC) start. */
+static bool pending_start_rtc;
+static bool current_start_rtc;
 
 /* OTA progress tracking - protected by ota_mutex (accessed from MCUmgr cb + work queue) */
 static K_MUTEX_DEFINE(ota_mutex);
@@ -409,6 +416,11 @@ int clip_post_event(enum clip_event event)
     return 0;
 }
 
+void clip_event_set_start_rtc(bool rtc)
+{
+    pending_start_rtc = rtc;
+}
+
 int clip_post_event_sync(enum clip_event event,
                          struct clip_event_result_info *info)
 {
@@ -454,6 +466,14 @@ void clip_event_process(void)
         if (item.event >= CLIP_EVENT_COUNT) {
             LOG_WRN("Invalid event: %d", item.event);
             goto notify;
+        }
+
+        /* Capture (and clear) the RTC-start request for this event, before
+         * any early-exit path below can skip execute_transition. */
+        current_start_rtc = false;
+        if (item.event == CLIP_EVENT_START) {
+            current_start_rtc = pending_start_rtc;
+            pending_start_rtc = false;
         }
 
         /* Special case: recording blocked while WiFi active */
@@ -526,6 +546,31 @@ static enum clip_event_result execute_transition(enum clip_event event,
     {
         struct clip_context *ctx = clip_get_context();
 
+        if (current_start_rtc) {
+            /* RTC session: pipeline only — no SD session, works on a full
+             * card, but requires a BLE consumer ready to subscribe. */
+            if (!ble_is_connected() || !ble_is_file_data_notify_enabled()) {
+                LOG_WRN("RTC refused: BLE link or data notify not ready");
+                return CLIP_EVENT_INVALID;
+            }
+
+            err = audio_start_rtc();
+            if (err) {
+                if (err == -EBUSY) {
+                    return CLIP_EVENT_BUSY;
+                }
+                LOG_ERR("audio_start_rtc failed: %d", err);
+                display_post_error("Rec Fail");
+                return CLIP_EVENT_ERROR;
+            }
+
+            rtc_stream_session_begin(audio_get_session_id());
+            display_post_event(UI_EVENT_REC_START);
+            display_set_recording(true, true);
+            ble_notify_state_change("STREAMING", audio_get_session_id(), -1);
+            return CLIP_EVENT_OK;
+        }
+
         /* SD may be idle-powered-off — bring it up before recording writes */
         err = storage_ensure_mounted();
         if (err) {
@@ -578,6 +623,15 @@ static enum clip_event_result execute_transition(enum clip_event event,
             LOG_ERR("audio_stop_recording failed: %d", err);
             return CLIP_EVENT_ERROR;
         }
+
+        /* RTC teardown: STREAM_END first (if the stream is up), then state.
+          * No-op when STOP was posted by rtc_stream itself (timeout / BLE
+          * disconnect already ended the session). */
+        if (rtc_stream_session_active()) {
+            rtc_stream_stop(RTC_END_REASON_STOPPED);
+            rtc_stream_session_end();
+        }
+
         haptic_play_pattern(HAPTIC_DOUBLE);  /* stop = 2 buzzes (button or AT) */
         display_post_event(UI_EVENT_REC_STOP);
         display_set_recording(false, false);
@@ -628,6 +682,14 @@ static enum clip_event_result execute_transition(enum clip_event event,
     {
         if (!audio_is_recording()) {
             return CLIP_EVENT_INVALID;
+        }
+
+        /* RTC sessions have no on-card session to bookmark (button path;
+         * AT+MARK is rejected earlier in the AT layer). */
+        if (rtc_stream_session_active()) {
+            LOG_WRN("MARK not supported in RTC mode");
+            haptic_play_pattern(HAPTIC_SHORT);
+            return CLIP_EVENT_OK;
         }
 
         err = audio_add_bookmark();
