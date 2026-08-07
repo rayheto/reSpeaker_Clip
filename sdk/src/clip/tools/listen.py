@@ -32,12 +32,22 @@ def build_parser() -> argparse.ArgumentParser:
     add_connection_options(parser)
     parser.add_argument("--out", help="output file (default rtc-<session>.bin)")
     parser.add_argument("--duration", type=float, help="stream this many seconds; default waits for Ctrl-C")
+    parser.add_argument("--pause-at", type=float, help="send AT+PAUSE this many seconds into the stream")
+    parser.add_argument("--resume-at", type=float, help="send AT+RESUME this many seconds into the stream")
     return parser
+
+
+async def _at_after(client, delay: float, method) -> None:
+    await asyncio.sleep(delay)
+    await method()
 
 
 async def run(args: argparse.Namespace) -> int:
     if args.duration is not None and args.duration <= 0:
         raise ValueError("--duration must be positive")
+    for name, value in (("--pause-at", args.pause_at), ("--resume-at", args.resume_at)):
+        if value is not None and (value <= 0 or (args.duration is not None and value >= args.duration)):
+            raise ValueError(f"{name} must be positive and smaller than --duration")
     client = make_client(args)
     async with client:
         session = await client.start_rtc()
@@ -51,6 +61,11 @@ async def run(args: argparse.Namespace) -> int:
             await client.stream_rtc(session, receiver)
             await receiver.wait_start(timeout=10.0)
             print(f"Streaming to {out_path} (Ctrl-C to stop).")
+            side_tasks = []
+            if args.pause_at is not None:
+                side_tasks.append(asyncio.create_task(_at_after(client, args.pause_at, client.pause_recording)))
+            if args.resume_at is not None:
+                side_tasks.append(asyncio.create_task(_at_after(client, args.resume_at, client.resume_recording)))
             try:
                 if args.duration is None:
                     await receiver.wait_end()
@@ -61,6 +76,8 @@ async def run(args: argparse.Namespace) -> int:
         except KeyboardInterrupt:
             print("Stopping...")
         finally:
+            for task in side_tasks:
+                task.cancel()
             try:
                 if client.is_connected and not receiver.ended.is_set():
                     await client.stop_recording()
