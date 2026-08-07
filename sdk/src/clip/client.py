@@ -21,6 +21,7 @@ from .models import (
     Storage,
     WifiAccessPoint,
 )
+from .stream import StreamReceiver, stream_session as _stream_session
 from .transfer import ProgressCallback, download_session as _download_session
 from .transports.base import BaseTransport
 from .validation import chunk_name, page, session_id
@@ -220,6 +221,11 @@ class ClipClient:
         value = _data(response).get("session")
         return value if isinstance(value, str) else None
 
+    async def start_rtc(self) -> str:
+        """Start a live RTC session: Opus over BLE, nothing written to SD."""
+        response = await self.request("AT+START=rtc")
+        return _required_str(_data(response), "session")
+
     async def stop_recording(self) -> dict[str, Any]:
         return _data(await self.request("AT+STOP"))
 
@@ -311,6 +317,14 @@ class ClipClient:
 
     async def cancel_download(self) -> None:
         await self.request("AT+CANCEL")
+
+    async def stream_rtc(self, value: str, receiver: StreamReceiver) -> None:
+        """Start an RTC stream: frames flow into receiver until STREAM_END.
+
+        AT+STOP (stop_recording) ends the stream; the caller must detach the
+        receiver afterwards via transport.set_file_frame_handler(None).
+        """
+        await _stream_session(self, value, receiver)
 
     async def download_session(
         self,

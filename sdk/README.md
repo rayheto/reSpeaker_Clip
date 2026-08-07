@@ -11,7 +11,8 @@ The SDK provides:
 - sequential command dispatch, so concurrent callers cannot consume one another's
   command responses;
 - streaming file download to `*.part` files, with length and CRC32 checks before an
-  atomic rename; and
+  atomic rename;
+- live RTC audio streaming (`AT+START=rtc`), with sequence-gap accounting; and
 - an intentionally small CLI for common inspection and download tasks.
 
 ## Install for development
@@ -30,6 +31,7 @@ Installation registers these commands on `PATH`:
 clip.terminal --transport ble --address AA:BB:CC:DD:EE:FF
 clip.sync --transport udp --all --output recordings
 clip.record --transport ble --mode enhanced --duration 60
+clip.listen --transport ble --address AA:BB:CC:DD:EE:FF
 clip.web --transport udp
 ```
 
@@ -37,6 +39,31 @@ clip.web --transport udp
 interactive and workflow-oriented tools. `clip.web` is always registered but
 requires the `web` extra when run: `pip install -e '.[web]'` (or `.[web,ble]`
 when it controls a BLE device).
+
+## RTC live streaming
+
+`AT+START=rtc` runs the microphone pipeline without touching the SD card;
+`AT+DOWNLOAD=<session>` then streams live Opus frames over BLE:
+
+```sh
+clip.listen --transport ble --address AA:BB:CC:DD:EE:FF --duration 30
+```
+
+Frames are written as 2-byte little-endian length + raw Opus packet
+(`rtc-<session>.bin` by default), ready for any Opus decoder. `Ctrl-C` sends
+`AT+STOP`. The Python API mirrors the CLI:
+
+```python
+from clip.stream import StreamReceiver
+
+receiver = StreamReceiver(on_frame=print)
+session = await clip.start_rtc()
+await clip.stream_rtc(session, receiver)
+await receiver.wait_start(timeout=10)
+...
+await clip.stop_recording()          # ends the RTC stream
+await receiver.wait_end(timeout=5)
+```
 
 ## Quick start
 
