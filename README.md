@@ -76,6 +76,50 @@ visible over USB the moment the device is plugged in. Flash it like any other ap
 - `FILE_SUFFIX` files are discovered only at configure time: if you add/remove suffixed
   files, rebuild with `--pristine` (a stale `DTC_OVERLAY_FILE` is cached otherwise).
 
+**Host-side conflicts (read before using this mode):**
+
+- **ModemManager** probes new CDC-ACM ports and can grab the Clip's port (AT
+  replies get eaten; `minicom`/scripts see a busy or garbled port). Ignore the
+  Clip by VID:
+  ```sh
+  sudo tee /etc/udev/rules.d/98-clip-mm-ignore.rules <<'EOF'
+  SUBSYSTEM=="usb", ATTRS{idVendor}=="2886", ENV{ID_MM_DEVICE_IGNORE}="1"
+  SUBSYSTEM=="tty", ATTRS{idVendor}=="2886", ENV{ID_MM_DEVICE_IGNORE}="1"
+  EOF
+  sudo udevadm control --reload-rules
+  ```
+- **Desktop storage daemons** (udisks2/automount) probe the SD card over MSC on
+  every plug. The probing interrupts the device and can disturb an active
+  session; during development stop udisks2 (`sudo systemctl stop udisks2`) or
+  add an ignore rule for the Clip's block device.
+- **Keep the CDC port free while flashing.** If a terminal (`minicom`,
+  `screen`, a leftover `clip.terminal`) holds `/dev/ttyACMx`, mcumgr DFU
+  uploads time out. Close every console on the port before entering DFU.
+- **MSC vs. recording:** while USB is up the SD card is exported to the host.
+  Starting a recording is refused while the host holds the MSC device
+  ("Recording blocked while USB MSC active"). Conversely, enabling USB
+  (including dev-mode auto re-enable) is refused while a recording is active,
+  because enabling USB unmounts the SD card.
+
+**Logs during normal recording:** yes — if the USB console was already up
+before the recording started, logs keep flowing over CDC for the whole
+recording (recording never disables USB). If the cable is plugged *during* a
+recording, the dev-mode auto-enable is refused until the recording stops (the
+SD card is owned by the recorder); stop the recording first or use BLE
+(`clip.terminal`) meanwhile.
+
+**When USB is enabled / disabled (dev mode):**
+
+| Event | Action |
+|---|---|
+| Boot with cable plugged | CDC auto-enabled after enumeration (`CONFIG_CLIP_USB_AUTO_ENABLE`) |
+| `AT+USB=ON` (any build) | Enabled; if no VBUS is detected a 10-min idle timer starts (`USB_NO_VBUS_TIMEOUT_MS`) |
+| VBUS droop while active | 3 s grace (`USB_VBUS_LOST_GRACE_MS`) rides through load spikes (radio TX bursts, mic/DSP start); still gone afterwards -> disabled + `"usb":"off"` event |
+| VBUS returns while inactive | Dev mode auto re-enables the console (no reboot, no `AT+USB=ON` needed) |
+| No VBUS for 10 min | Auto-disabled |
+| `AT+USB=OFF` | Disabled manually |
+| After DFU `serial reset` | CDC re-enumerates automatically; requires the `udc_nrf` VBUS patch, see `patches/zephyr/` |
+
 > **Board identifier**: `clip/nrf5340/cpuapp` (NOT `respeaker/...`)
 
 ### Firmware Upgrade (USB — no J-Link needed)

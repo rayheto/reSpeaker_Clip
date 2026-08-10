@@ -9,6 +9,7 @@
 #include <zephyr/usb/usbd.h>
 #include <zephyr/usb/class/usbd_msc.h>
 #include <zephyr/drivers/uart.h>
+#include <nrfx_power.h>
 
 #include "usb_cdc.h"
 #include "storage.h"
@@ -56,9 +57,40 @@ static struct k_work_delayable usb_timeout_work;
 static void usb_timeout_handler(struct k_work *work)
 {
 	if (usb_active && !usb_vbus_present) {
-		LOG_INF("USB auto-disable: no VBUS for 10min");
+		LOG_WRN("USB auto-disable: no VBUS for 10min");
 		usb_cdc_disable();
 		ble_notify_event("usb", "off");
+	}
+}
+
+/* Grace period before disabling USB after VBUS loss. Brief droops happen when
+ * load spikes (radio TX bursts at BLE connect, mic/DSP start), and an instant
+ * disable would kill the console permanently for a transient dip.
+ */
+#define USB_VBUS_LOST_GRACE_MS 3000
+static struct k_work_delayable usb_vbus_lost_work;
+
+static void usb_vbus_lost_handler(struct k_work *work)
+{
+	if (usb_active && !usb_vbus_present) {
+		LOG_WRN("USB auto-disable: VBUS gone for %dms",
+			USB_VBUS_LOST_GRACE_MS);
+		usb_cdc_disable();
+		ble_notify_event("usb", "off");
+	}
+}
+
+/* Dev mode: bring the console back automatically when VBUS returns after a
+ * droop/unplug-replug, instead of requiring a reboot or AT+USB=ON.
+ */
+static struct k_work usb_reenable_work;
+
+static void usb_reenable_work_handler(struct k_work *work)
+{
+	int err = usb_cdc_enable();
+
+	if (err) {
+		LOG_WRN("USB re-enable after VBUS return failed: %d", err);
 	}
 }
 
@@ -140,14 +172,21 @@ static void usb_msg_cb(struct usbd_context *const ctx,
 
 	if (msg->type == USBD_MSG_VBUS_READY) {
 		usb_vbus_present = true;
-		/* VBUS present: cancel auto-disable timeout */
+		/* VBUS present: cancel auto-disable timers */
 		k_work_cancel_delayable(&usb_timeout_work);
+		k_work_cancel_delayable(&usb_vbus_lost_work);
+		if (!usb_active && IS_ENABLED(CONFIG_CLIP_USB_AUTO_ENABLE)) {
+			/* Dev mode: restore the console after a droop */
+			k_work_submit(&usb_reenable_work);
+		}
 	} else if (msg->type == USBD_MSG_VBUS_REMOVED) {
+		LOG_WRN("USB: VBUS removed (%dms grace before disable)",
+			USB_VBUS_LOST_GRACE_MS);
 		usb_vbus_present = false;
-		/* VBUS removed: auto-disable USB immediately */
+		/* VBUS removed: disable after the grace period (debounce) */
 		if (usb_active) {
-			usb_cdc_disable();
-			ble_notify_event("usb", "off");
+			k_work_schedule(&usb_vbus_lost_work,
+					K_MSEC(USB_VBUS_LOST_GRACE_MS));
 		}
 	} else if (msg->type == USBD_MSG_CDC_ACM_CONTROL_LINE_STATE) {
 		uint32_t dtr = 0U;
@@ -210,6 +249,8 @@ int usb_cdc_init(void)
 
 	/* Setup auto-disable work */
 	k_work_init_delayable(&usb_timeout_work, usb_timeout_handler);
+	k_work_init_delayable(&usb_vbus_lost_work, usb_vbus_lost_handler);
+	k_work_init(&usb_reenable_work, usb_reenable_work_handler);
 
 	/* USB starts disabled; use AT+USB=on to enable */
 	LOG_INF("USB CDC+MSC initialized (disabled)");
@@ -220,6 +261,17 @@ int usb_cdc_enable(void)
 {
 	if (usb_active) {
 		return 0;
+	}
+
+	/* Re-sync VBUS state from the regulator: USBREG events are
+	 * edge-triggered and can be missed (boot right after DFU exit, races
+	 * with driver init). Without this the 10-min auto-disable timer runs
+	 * even though the cable is plugged in.
+	 */
+	if (nrfx_power_usbstatus_get() != NRFX_POWER_USB_STATE_DISCONNECTED) {
+		usb_vbus_present = true;
+		k_work_cancel_delayable(&usb_timeout_work);
+		k_work_cancel_delayable(&usb_vbus_lost_work);
 	}
 
 	if (audio_is_recording()) {
@@ -262,6 +314,7 @@ int usb_cdc_disable(void)
 	}
 
 	k_work_cancel_delayable(&usb_timeout_work);
+	k_work_cancel_delayable(&usb_vbus_lost_work);
 	usbd_disable(&clip_usbd);
 	usb_active = false;
 	LOG_INF("USB disabled");
