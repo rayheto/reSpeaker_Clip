@@ -486,8 +486,11 @@ void clip_event_process(void)
             goto notify;
         }
 
-        /* Special case: recording blocked while USB MSC active */
-        if (usb_cdc_is_enabled() && item.event == CLIP_EVENT_START) {
+		/* Special case: recording blocked while USB MSC active. RTC is
+		 * exempt: it streams over BLE and never touches the SD, so it
+		 * cannot conflict with MSC's exclusive SD access. */
+		if (usb_cdc_is_enabled() && item.event == CLIP_EVENT_START &&
+		    !current_start_rtc) {
             LOG_INF("Recording blocked: USB MSC active");
             display_post_event(UI_EVENT_USB_BLOCKED);
             if (item.result) {
@@ -553,6 +556,11 @@ static enum clip_event_result execute_transition(enum clip_event event,
                 LOG_WRN("RTC refused: BLE link or data notify not ready");
                 return CLIP_EVENT_INVALID;
             }
+
+            /* Ask for tight connection parameters now so they have the
+             * whole session-setup round trip to apply before streaming
+             * begins (rtc_stream_start waits for them). */
+            ble_request_rtc_conn_params(true);
 
             err = audio_start_rtc();
             if (err) {

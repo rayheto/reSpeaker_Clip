@@ -451,6 +451,17 @@ void audio_register_data_callback(audio_data_callback_t callback, void *user_dat
     data_callback_user_data = user_data;
 }
 
+uint32_t audio_thread_stack_free(void)
+{
+    size_t unused = 0;
+
+    if (audio_thread_id == NULL ||
+        k_thread_stack_space_get(audio_thread_id, &unused) != 0) {
+        return 0;
+    }
+    return (uint32_t)unused;
+}
+
 const char *audio_get_session_id(void)
 {
     k_mutex_lock(&audio_state_mutex, K_FOREVER);

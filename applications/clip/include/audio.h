@@ -188,4 +188,12 @@ int audio_get_energy_level(void);
  */
 int audio_add_bookmark(void);
 
+/**
+ * @brief Free stack bytes of the audio recording thread
+ *
+ * Diagnostic helper: returns the unused stack space of the audio thread,
+ * or 0 if the thread is not running.
+ */
+uint32_t audio_thread_stack_free(void);
+
 #endif /* AUDIO_H */
