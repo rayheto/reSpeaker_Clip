@@ -51,7 +51,27 @@ clip.listen --transport ble --address AA:BB:CC:DD:EE:FF --duration 30
 
 Frames are written as 2-byte little-endian length + raw Opus packet
 (`rtc-<session>.bin` by default), ready for any Opus decoder. `Ctrl-C` sends
-`AT+STOP`. The Python API mirrors the CLI:
+`AT+STOP`.
+
+Live playback and WAV export need the `play` extra (`pip install -e '.[play]'`
+or `.[play,ble]`):
+
+```sh
+clip.listen --transport ble --address AA:BB:CC:DD:EE:FF --play
+clip.listen --transport ble --play --buffer-ms 200 --device 3 --wav
+clip.listen --transport ble --duration 30 --simulate-playback
+```
+
+`--play` decodes the stream and plays it through the sound card, paced by a
+jitter buffer that smooths the bursty BLE arrivals (`--buffer-ms` sets the
+depth, default 100 ms, `0` = pass-through; `--device` selects the output by
+index or name substring — list devices with `python -m sounddevice`).
+`--wav [PATH]` additionally decodes the stream to a 16 kHz mono WAV file
+(`rtc-<session>.wav` by default). `--simulate-playback` needs no audio
+hardware: after the run it replays the recorded arrival times through the
+jitter-buffer model and prints underruns at several depths.
+
+The Python API mirrors the CLI:
 
 ```python
 from clip.stream import StreamReceiver
