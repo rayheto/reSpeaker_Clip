@@ -25,7 +25,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-ble = ["bleak>=0.22"]
+ble = ["bleak>=3.0"]
 web = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
 wifi = []
 dev = ["pytest>=8", "pytest-asyncio>=0.23"]
