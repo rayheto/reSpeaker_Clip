@@ -18,7 +18,7 @@ The SDK provides:
 ## Install for development
 
 ```sh
-cd /home/lht/clip/sdk
+cd /path/to/reSpeaker_Clip/sdk
 python -m pip install -e '.[dev,ble]'
 pytest
 ```
@@ -31,7 +31,9 @@ Installation registers these commands on `PATH`:
 clip.terminal --transport ble --address AA:BB:CC:DD:EE:FF
 clip.sync --transport udp --all --output recordings
 clip.record --transport ble --mode enhanced --duration 60
-clip.listen --transport ble --address AA:BB:CC:DD:EE:FF
+clip.stream --transport ble --address AA:BB:CC:DD:EE:FF
+clip.play --transport ble --address AA:BB:CC:DD:EE:FF
+clip.wifi --address AA:BB:CC:DD:EE:FF
 clip.web --transport udp
 ```
 
@@ -43,46 +45,75 @@ when it controls a BLE device).
 ## RTC live streaming
 
 `AT+START=rtc` runs the microphone pipeline without touching the SD card;
-`AT+DOWNLOAD=<session>` then streams live Opus frames over BLE:
+`AT+DOWNLOAD=<session>` then streams live Opus frames over BLE (BLE only —
+the tools reject other transports). The device produces; your code consumes.
+
+**`clip.stream`** streams and captures — nothing else:
 
 ```sh
-clip.listen --transport ble --address AA:BB:CC:DD:EE:FF --duration 30
+clip.stream --transport ble --address AA:BB:CC:DD:EE:FF
 ```
 
-Frames are written as 2-byte little-endian length + raw Opus packet
-(`rtc-<session>.bin` by default), ready for any Opus decoder. `Ctrl-C` sends
-`AT+STOP`.
+Frames are written as a received-packet log — 2-byte little-endian length +
+raw Opus packet (`rtc-<session>.bin.part` while streaming, atomically renamed
+to `rtc-<session>.bin` on a normal stream end). It is not a standard media
+container: parse the length-prefixed records and feed each packet to a
+packet-level Opus decoder.
+Without `--duration`, streaming continues until `Ctrl-C`; specify, for
+example, `--duration 30` for a bounded run. `Ctrl-C` sends `AT+STOP`.
 
-Live playback and WAV export need the `play` extra (`pip install -e '.[play]'`
-or `.[play,ble]`):
+The source-checkout producer/consumer example has the same duration policy:
 
 ```sh
-clip.listen --transport ble --address AA:BB:CC:DD:EE:FF --play
-clip.listen --transport ble --play --buffer-ms 200 --device 3 --wav
-clip.listen --transport ble --duration 30 --simulate-playback
+python examples/demo_stream.py --address AA:BB:CC:DD:EE:FF
 ```
 
-`--play` decodes the stream and plays it through the sound card, paced by a
-jitter buffer that smooths the bursty BLE arrivals (`--buffer-ms` sets the
+**`clip.play`** is the live-playback *example* and needs the `play` **and**
+`ble` extras — it is BLE-only and `play` does not pull in `bleak`:
+
+```sh
+pip install -e '.[play,ble]'
+```
+
+```sh
+clip.play --transport ble --address AA:BB:CC:DD:EE:FF
+clip.play --transport ble --buffer-ms 200 --device 3 --wav
+clip.play --transport ble --duration 30 --simulate-playback
+```
+
+> **Playback is an example, not a demo setup:** the Clip has no echo
+> cancellation, so playing through speakers feeds the microphone and howls.
+> Output must go to **headphones**.
+
+`clip.play` decodes the stream and plays it through the sound card, paced by
+a jitter buffer that smooths the bursty BLE arrivals (`--buffer-ms` sets the
 depth, default 100 ms, `0` = pass-through; `--device` selects the output by
-index or name substring — list devices with `python -m sounddevice`).
-`--wav [PATH]` additionally decodes the stream to a 16 kHz mono WAV file
-(`rtc-<session>.wav` by default). `--simulate-playback` needs no audio
-hardware: after the run it replays the recorded arrival times through the
-jitter-buffer model and prints underruns at several depths.
+index or name substring — list devices with `python -m sounddevice`). It
+keeps the same-session `.bin` capture; `--wav [PATH]` additionally decodes to
+a 16 kHz mono WAV file (`rtc-<session>.wav` by default), and
+`--simulate-playback` adds an offline jitter-buffer analysis after the run:
+it replays the recorded arrival times through the jitter-buffer model and
+prints underruns at several depths (it supplements live playback; the audio
+device is still required for playback itself).
 
-The Python API mirrors the CLI:
+The Python API mirrors the CLI; see
+[docs/api.md](docs/api.md#consuming-stream-data) for the three ways to
+consume stream data (frame callback, chunk/stack push, complete `.bin`):
 
 ```python
 from clip.stream import StreamReceiver
 
-receiver = StreamReceiver(on_frame=print)
+receiver = StreamReceiver(on_frame=print)          # sync, non-blocking callback
 session = await clip.start_rtc()
-await clip.stream_rtc(session, receiver)
-await receiver.wait_start(timeout=10)
-...
-await clip.stop_recording()          # ends the RTC stream
-await receiver.wait_end(timeout=5)
+token = await clip.stream_rtc(session, receiver)
+try:
+    await receiver.wait_start(timeout=10)
+    ...
+    await clip.stop_recording()                    # ends the RTC stream
+    await receiver.wait_end(timeout=5)
+finally:
+    # always release the handler slot, even on error paths
+    clip.transport.detach_file_frame_handler(token)
 ```
 
 ## Quick start

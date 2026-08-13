@@ -1630,8 +1630,12 @@ on an RTC session).
 
 One live Opus frame (20 ms of audio). Same layout as the DATA frame but on
 an independent sequence space. Frames are emitted in capture order; when the
-device is under BLE backpressure it **drops frames instead of blocking**, so
-sequence gaps are possible and must be tolerated by the decoder.
+device is under BLE backpressure it **drops frames instead of blocking**.
+Note that `seq` advances only after a frame is successfully handed to the
+BLE link, so dropped frames do **not** consume sequence numbers: loss shows
+up as missing frames, not as `seq` jumps. Receivers should still treat a
+`seq` discontinuity as a protocol-drift indicator (defensive), not as a
+device-side loss count.
 
 ```
 [type:1][seq_lo:1][seq_hi:1][len_lo:1][len_hi:1][payload:N]
@@ -1769,8 +1773,9 @@ subscribed (notify enabled) before `AT+START=RTC`.
 2. `AT+START=RTC` → response carries the session id, mic pipeline starts
    (device state broadcast: `"STREAMING"`). Frames are encoded immediately
    but only buffered (bounded, drop-oldest).
-3. `AT+DOWNLOAD=<session_id>` → device flushes the pre-buffer, sends
-   `STREAM_START`, then `STREAM_DATA` frames in real time
+3. `AT+DOWNLOAD=<session_id>` → device **discards** whatever was queued
+   before this point (RTC delivers "now" — pre-DOWNLOAD audio is never
+   sent), sends `STREAM_START`, then `STREAM_DATA` frames in real time
 4. `AT+STOP` → `STREAM_END` (reason 0), session torn down
 
 **Pause/resume:** `AT+PAUSE` discards all buffered data and stops emission
@@ -1785,8 +1790,10 @@ BLE disconnect.
 - RTC sessions never appear in `AT+LIST` (nothing is stored)
 - The stream shares the File Data characteristic with file transfer; the two
   are mutually exclusive (a file download cannot run while streaming)
-- Backpressure policy: dropped frames are counted, never retried — sequence
-  gaps in `STREAM_DATA` are expected under poor RF conditions
+- Backpressure policy: dropped frames are counted, never retried. Because
+  `seq` only advances on successful send, frame loss appears as missing
+  frames (sequence discontinuities should not occur under current firmware
+  and the reliable BLE link; treat any as protocol drift)
 
 ## 5. State Machines
 

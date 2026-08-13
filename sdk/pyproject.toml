@@ -38,7 +38,8 @@ clip-sdk = "clip.cli:main"
 "clip.record" = "clip.tools.record:main"
 "clip.web" = "clip.tools.web:main"
 "clip.wifi" = "clip.tools.wifi:main"
-"clip.listen" = "clip.tools.listen:main"
+"clip.stream" = "clip.tools.stream:main"
+"clip.play" = "clip.tools.play:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/clip"]

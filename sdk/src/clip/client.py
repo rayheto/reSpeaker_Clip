@@ -54,8 +54,15 @@ class ClipClient:
         await self.connect()
         return self
 
-    async def __aexit__(self, _exc_type: object, _exc: object, _traceback: object) -> None:
-        await self.disconnect()
+    async def __aexit__(self, exc_type: object, _exc: object, _traceback: object) -> None:
+        try:
+            await self.disconnect()
+        except Exception:
+            # A disconnect failure must never replace the primary error that
+            # is already propagating out of the body.  With no primary error
+            # the disconnect failure is the failure, so it propagates.
+            if exc_type is None:
+                raise
 
     @property
     def is_connected(self) -> bool:
@@ -318,13 +325,15 @@ class ClipClient:
     async def cancel_download(self) -> None:
         await self.request("AT+CANCEL")
 
-    async def stream_rtc(self, value: str, receiver: StreamReceiver) -> None:
+    async def stream_rtc(self, value: str, receiver: StreamReceiver) -> int | None:
         """Start an RTC stream: frames flow into receiver until STREAM_END.
 
-        AT+STOP (stop_recording) ends the stream; the caller must detach the
-        receiver afterwards via transport.set_file_frame_handler(None).
+        Returns the file-frame handler lease token. AT+STOP
+        (stop_recording) ends the stream; the caller then detaches with
+        ``transport.detach_file_frame_handler(token)``, which clears the
+        handler slot only if this stream still owns it.
         """
-        await _stream_session(self, value, receiver)
+        return await _stream_session(self, value, receiver)
 
     async def download_session(
         self,
