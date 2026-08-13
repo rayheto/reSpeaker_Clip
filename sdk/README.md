@@ -103,7 +103,12 @@ consume stream data (frame callback, chunk/stack push, complete `.bin`):
 ```python
 from clip.stream import StreamReceiver
 
-receiver = StreamReceiver(on_frame=print)          # sync, non-blocking callback
+def handle_opus_frame(opus_packet: bytes) -> None:
+    # One real-time Opus packet per call (nominally 20 ms of audio).
+    # This payload excludes the STREAM_DATA type, sequence and length fields.
+    process(opus_packet)
+
+receiver = StreamReceiver(on_frame=handle_opus_frame)  # sync, non-blocking
 session = await clip.start_rtc()
 token = await clip.stream_rtc(session, receiver)
 try:
@@ -115,6 +120,11 @@ finally:
     # always release the handler slot, even on error paths
     clip.transport.detach_file_frame_handler(token)
 ```
+
+`receiver.add_sink(capture.feed)` registers another consumer of the same Opus
+payload; `capture.feed` writes each packet to the `.bin` log but is not the
+source of the real-time frames. Do not replace the transport's single
+file-frame handler—use `on_frame` or `add_sink()` to consume live packets.
 
 ## Quick start
 

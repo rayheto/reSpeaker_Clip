@@ -99,15 +99,53 @@ taps are fail-fast): the frame is first delivered to every sink, then
 `__cause__`.  Additional raw-frame consumers attach with
 `receiver.add_sink(callable)` and are dispatched BEFORE `on_frame`.
 
+### Where each real-time frame arrives
+
+There are two different representations in the receive path:
+
+```text
+BLE File Data notification
+  -> complete STREAM_DATA packet: [0x14][seq:2][payload_len:2][Opus payload]
+  -> StreamReceiver.feed(raw_frame)
+  -> decode_file_frame(raw_frame)
+  -> StreamDataFrame(sequence, payload)
+  -> add_sink callbacks, then on_frame, receive payload only
+```
+
+Application code normally consumes the last value: one `bytes` object
+containing one real-time Opus packet (nominally 20 ms of audio). It does not
+include the `0x14` type, sequence number, payload-length field, or an arrival
+timestamp.
+
+```python
+def handle_opus_frame(opus_packet: bytes) -> None:
+    # Called inline for every real-time Opus packet. Keep this non-blocking.
+    send_to_decoder_or_asr(opus_packet)
+
+receiver = StreamReceiver(on_frame=handle_opus_frame)
+
+# Several consumers may receive the same packet. StreamCapture.feed writes it
+# to the length-prefixed .bin log; it is not the source of the real-time data.
+receiver.add_sink(capture.feed)
+```
+
+The complete protocol packet first enters the SDK in
+`BleTransport._on_file_notification()` and is passed to
+`StreamReceiver.feed()`. The transport file-frame handler is a single leased
+slot owned by the active stream or file transfer, so application code should
+not replace it to observe frames. Use `on_frame` or `add_sink()` for normal
+real-time consumers. Per-packet sequence numbers are decoded internally for
+`sequence_gaps`; the current public payload callbacks do not expose them.
+
 ### Consuming stream data
 
 The device produces; three consumer paths are available, and they can be
 combined by attaching several sinks to one receiver:
 
-1. **Frame callback** — lowest latency, real-time processing:
+1. **Frame callback** — lowest latency, one real-time Opus packet per call:
 
    ```python
-   receiver = StreamReceiver(on_frame=handle_frame)
+   receiver = StreamReceiver(on_frame=handle_opus_frame)
    ```
 
 2. **Chunk/stack push** (`StreamConsumer`) — bounded async delivery for
