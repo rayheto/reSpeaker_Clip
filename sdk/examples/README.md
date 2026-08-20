@@ -1,48 +1,17 @@
 # SDK examples
 
-These examples are standalone, real-device demos built on the installed
-`clip` package.  They are intentionally minimal — each one shows one
-producer/consumer pattern against a live Clip over BLE, with no CLI wrapper
-or extra features.  The scripts in this directory run before the package is
-installed thanks to `_bootstrap.py`, which inserts `sdk/src` onto
-`sys.path`; install the SDK (or the relevant extra) only for the runtime
+This standalone real-device example uses the public `clip` package API. It
+shows a real-time analysis path against a live Clip over BLE, with no CLI
+wrapper or unrelated features. From a source checkout, `_bootstrap.py`
+inserts `sdk/src` onto `sys.path`; install the relevant extras for runtime
 dependencies.
 
 | Example | Purpose |
 |---|---|
-| `demo_stream.py` | Stream live RTC audio over BLE and exercise all three data paths at once: `.bin` packet capture, live-edge async consumer, and receiver stats |
 | `demo_stream_fft_display.py` | Real-time terminal FFT spectrum of an RTC stream through the SDK `JitterBuffer` + Opus decoder + NumPy FFT, with an adaptive noise floor and hard spectral gate |
 
-Both examples run until `Ctrl-C` when `--duration` is omitted.  Omitting
+The example runs until `Ctrl-C` when `--duration` is omitted. Omitting
 `--address` scans for a BLE device named "Clip" and uses the first match.
-
-## `demo_stream.py` — producer/consumer demo
-
-Install the BLE extra (see `sdk/README.md` for full install instructions; skip if already installed):
-
-```sh
-cd /path/to/reSpeaker_Clip/sdk
-python -m pip install -e '.[ble]'
-```
-
-Examples:
-
-```sh
-python examples/demo_stream.py --address AA:BB:CC:DD:EE:FF  # replace with your device address
-python examples/demo_stream.py --address AA:BB:CC:DD:EE:FF --duration 10
-python examples/demo_stream.py                 # scan for a device named "Clip"
-```
-
-This is the standalone producer/consumer counterpart of `clip.stream`.  It
-wires a `StreamReceiver` to two sinks at once:
-
-* `StreamCapture` — raw arrivals → `rtc-<session>.bin.part`, atomically
-  renamed to `rtc-<session>.bin` on a normal end
-* `StreamConsumer` — live-edge async push, counting chunks and stacks
-
-At the end it prints receiver stats — frames, bytes, sequence
-discontinuities, and inter-frame gap averages — plus the consumer and
-capture counts.
 
 ## `demo_stream_fft_display.py` — live FFT spectrum demo
 
@@ -74,7 +43,7 @@ avg inter-frame : 20.0 ms (max 120 ms)
 Live spectrum (SDK JitterBuffer + Opus decode + FFT):
   depth target    : 5 frames (100 ms)
   frames in       : 2503
-  frames played   : 2503
+  frames processed: 2503
   start wait      : 7 silent ticks
   underruns       : 17 (17 silent ticks)
   catch-up drops  : 0

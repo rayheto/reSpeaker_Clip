@@ -61,12 +61,6 @@ packet-level Opus decoder.
 Without `--duration`, streaming continues until `Ctrl-C`; specify, for
 example, `--duration 30` for a bounded run. `Ctrl-C` sends `AT+STOP`.
 
-The source-checkout producer/consumer example has the same duration policy:
-
-```sh
-python examples/demo_stream.py --address AA:BB:CC:DD:EE:FF
-```
-
 The Python API mirrors the CLI; see
 [docs/api.md](docs/api.md#consuming-stream-data) for the three ways to
 consume stream data (frame callback, chunk/stack push, complete `.bin`):

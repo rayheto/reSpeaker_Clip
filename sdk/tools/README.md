@@ -33,9 +33,7 @@ clip.wifi --address AA:BB:CC:DD:EE:FF
 
 During SDK development, `python tools/terminal.py` (and the matching wrappers,
 including `stream.py`) run the exact same installed
-implementation. The standalone producer/consumer example is
-`python examples/demo_stream.py --address AA:BB:CC:DD:EE:FF`. Both
-`clip.stream` and that example run until `Ctrl-C` when `--duration` is omitted.
+implementation. `clip.stream` runs until `Ctrl-C` when `--duration` is omitted.
 The UDP default is the actual firmware port `8089`, not the old tool's `8080`.
 
 For the web panel install its extra and browse to the printed loopback URL:
