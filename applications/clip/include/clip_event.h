@@ -60,20 +60,29 @@ struct clip_event_result_info {
 int clip_post_event(enum clip_event event);
 
 /**
+ * @brief Post a START event with its recording mode attached
+ *
+ * The mode travels in the event queue item, so concurrent button and AT
+ * requests cannot overwrite each other.
+ *
+ * @param rtc true for an RTC streaming session, false for normal recording
+ */
+int clip_post_start_event(bool rtc);
+
+/**
  * @brief Post an event and wait for result (blocking, for AT commands)
  */
 int clip_post_event_sync(enum clip_event event,
                          struct clip_event_result_info *info);
 
 /**
- * @brief Mark the next CLIP_EVENT_START as an RTC (streaming) start
+ * @brief Post a START event with its recording mode and wait for the result
  *
- * Call immediately before posting CLIP_EVENT_START. The flag is consumed
- * when the START event is dequeued, so it never leaks into a later start.
- *
- * @param rtc true to start an RTC session, false for normal recording
+ * @param rtc true for an RTC streaming session, false for normal recording
+ * @param info result details filled by the event dispatcher
  */
-void clip_event_set_start_rtc(bool rtc);
+int clip_post_start_event_sync(bool rtc,
+                               struct clip_event_result_info *info);
 
 /**
  * @brief Get current device state (thread-safe)

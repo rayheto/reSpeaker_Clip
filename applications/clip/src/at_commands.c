@@ -863,15 +863,8 @@ static int cmd_start_handler(struct at_cmd_ctx *ctx, char *response, size_t len)
         }
     }
 
-    clip_event_set_start_rtc(rtc_request);
-
     struct clip_event_result_info info;
-    int ret = clip_post_event_sync(CLIP_EVENT_START, &info);
-
-    if (ret != 0) {
-        /* Event not queued — do not leak the RTC flag into a later start */
-        clip_event_set_start_rtc(false);
-    }
+    int ret = clip_post_start_event_sync(rtc_request, &info);
 
     if (ret != 0 || info.result != CLIP_EVENT_OK) {
         if (info.result == CLIP_EVENT_INVALID) {

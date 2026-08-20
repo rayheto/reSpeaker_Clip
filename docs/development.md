@@ -25,7 +25,7 @@
 | USB CDC Security | Disabled by default, AT+USB control, auto-off on disconnect |
 | NVS Configuration | 5 settings persist: mode, noise, autodel, dereverb, brightness |
 | Battery Monitoring | NPM1300 PMIC + nRF Fuel Gauge (SoC smoothing) |
-| Button Handler | Custom input driver: long-press record, short-press bookmark, single-click status |
+| Button Handler | Custom input driver: long-press RTC stream, short-press bookmark, single-click status |
 | OLED Display | CH1115 driver (88x48, I2C), 24x24 icons, 8x16 font, status bar, recording time, battery/charging, low battery fullscreen |
 | Haptic Motor | PMIC GPIO2 control (optional, Kconfig) |
 | CPU Boost | 128MHz/64MHz reference-counted system |

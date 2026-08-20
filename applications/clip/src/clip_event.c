@@ -85,6 +85,7 @@ static const uint8_t transition_table[CLIP_STATE_OTA + 1][CLIP_EVENT_COUNT] = {
 
 struct clip_event_item {
     enum clip_event event;
+    bool start_rtc;
     struct k_sem *done_sem;
     struct clip_event_result_info *result;
 };
@@ -134,11 +135,6 @@ static void ota_progress_work_handler(struct k_work *work)
 
 static atomic_t g_state;
 static atomic_t g_boost_refcnt;
-
-/* RTC-start request: set by AT "START=RTC" immediately before posting
- * CLIP_EVENT_START, captured+cleared when the START event is dequeued so it
- * cannot leak into a later (non-RTC) start. */
-static bool pending_start_rtc;
 static bool current_start_rtc;
 
 /* OTA progress tracking - protected by ota_mutex (accessed from MCUmgr cb + work queue) */
@@ -402,9 +398,12 @@ enum clip_state clip_event_get_state(void)
 /* Event Submission                                                            */
 /* ========================================================================== */
 
-int clip_post_event(enum clip_event event)
+static int post_event_async(enum clip_event event, bool start_rtc)
 {
-    struct clip_event_item item = { .event = event };
+    struct clip_event_item item = {
+        .event = event,
+        .start_rtc = start_rtc,
+    };
 
     int ret = k_msgq_put(&clip_ev_msgq, &item, K_NO_WAIT);
     if (ret != 0) {
@@ -416,19 +415,15 @@ int clip_post_event(enum clip_event event)
     return 0;
 }
 
-void clip_event_set_start_rtc(bool rtc)
-{
-    pending_start_rtc = rtc;
-}
-
-int clip_post_event_sync(enum clip_event event,
-                         struct clip_event_result_info *info)
+static int post_event_sync(enum clip_event event, bool start_rtc,
+                           struct clip_event_result_info *info)
 {
     struct k_sem sem;
     k_sem_init(&sem, 0, 1);
 
     struct clip_event_item item = {
         .event = event,
+        .start_rtc = start_rtc,
         .done_sem = &sem,
         .result = info,
     };
@@ -445,6 +440,28 @@ int clip_post_event_sync(enum clip_event event,
     k_sem_give(&event_notify_sem);
     k_sem_take(&sem, K_FOREVER);
     return 0;
+}
+
+int clip_post_event(enum clip_event event)
+{
+    return post_event_async(event, false);
+}
+
+int clip_post_start_event(bool rtc)
+{
+    return post_event_async(CLIP_EVENT_START, rtc);
+}
+
+int clip_post_event_sync(enum clip_event event,
+                         struct clip_event_result_info *info)
+{
+    return post_event_sync(event, false, info);
+}
+
+int clip_post_start_event_sync(bool rtc,
+                               struct clip_event_result_info *info)
+{
+    return post_event_sync(CLIP_EVENT_START, rtc, info);
 }
 
 /* ========================================================================== */
@@ -468,13 +485,9 @@ void clip_event_process(void)
             goto notify;
         }
 
-        /* Capture (and clear) the RTC-start request for this event, before
-         * any early-exit path below can skip execute_transition. */
-        current_start_rtc = false;
-        if (item.event == CLIP_EVENT_START) {
-            current_start_rtc = pending_start_rtc;
-            pending_start_rtc = false;
-        }
+        /* The START mode is carried by this queue item, so concurrent
+         * producers cannot redirect one another's request. */
+        current_start_rtc = item.event == CLIP_EVENT_START && item.start_rtc;
 
         /* Special case: recording blocked while WiFi active */
         if (current == CLIP_STATE_WIFI_SYNC && item.event == CLIP_EVENT_START) {

@@ -33,7 +33,7 @@ reSpeaker Clip is a portable Bluetooth recording device that provides high-quali
 
 ### 2.1 Core Recording Features
 
-- **US-001**: As a user, I want to start recording with a long button press so I can quickly capture audio
+- **US-001**: As a user, I want to start a live RTC session with a long button press while a BLE stream consumer is ready
 - **US-002**: As a user, I want to stop recording with a long button press so I can end the session
 - **US-003**: As a user, I want to add bookmarks during recording with a short button press so I can mark important moments
 - **US-004**: As a user, I want to see the current recording state on the OLED display so I know if I'm recording
@@ -318,13 +318,13 @@ the session directory and named `{NNNN}.opus` (e.g., `0/0001.opus`,
 
 **FR-4.1.2**: The system shall detect short press on user button
 
-**FR-4.1.3**: Long press shall toggle recording state:
-- IDLE -> RECORDING (start new session)
-- RECORDING -> IDLE (stop recording)
+**FR-4.1.3**: Long press shall toggle the live RTC recording state:
+- IDLE -> RECORDING (start an RTC session when BLE File Data notify is enabled)
+- RECORDING -> IDLE (stop the active recording or RTC session)
 
 **FR-4.1.4**: Short press during recording shall add bookmark
 
-**FR-4.1.5**: Button input shall work even when BLE is connected
+**FR-4.1.5**: Button RTC start shall require BLE connected with File Data notify enabled
 
 **FR-4.1.6**: The system shall use a custom GPIO button driver (CONFIG_INPUT_CLIP) with dedicated thread
 
@@ -702,7 +702,7 @@ Both modes produce approximately the same storage consumption (~14.4 MB/hour).
 
 ### 9.1 Button Interaction Design
 
-**UI-1.1**: Long press (> 1s): Toggle recording state (IDLE <-> RECORDING)
+**UI-1.1**: Long press (> 1s): Toggle RTC streaming state (IDLE <-> RECORDING); starting requires a ready BLE File Data subscriber
 
 **UI-1.2**: Short press (< 1s): Add bookmark (during recording)
 

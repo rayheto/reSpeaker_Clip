@@ -1809,7 +1809,7 @@ BLE disconnect.
 │  └───────┬──────┘                                          │
 │          │ boot complete                                    │
 │          ▼                                                  │
-│  ┌──────────────┐  AT+START/Long press  ┌──────────┐       │
+│  ┌──────────────┐  AT+START/button RTC   ┌──────────┐       │
 │  │     IDLE     │<────────────────────────│RECORDING │       │
 │  └──┬───┬──────┘                        └─────┬────┘       │
 │     │   │                                      │            │
@@ -1864,7 +1864,7 @@ BLE disconnect.
 │                    Recording State                       │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
-│   ┌──────────┐   Long press (1s) / AT+START   ┌────────┐│
+│   ┌──────────┐   Button RTC / AT+START        ┌────────┐│
 │   │   IDLE   │ ─────────────────────────────> │RECORDING│
 │   └──────────┘                                  └────┬───┘
 │        ▲                                             │   │
@@ -1877,7 +1877,7 @@ BLE disconnect.
 ```
 
 **Transitions:**
-- IDLE → RECORDING: Long button press OR `AT+START`
+- IDLE → RECORDING: `AT+START`, or long button press starting an RTC session
 - RECORDING → IDLE: Long button press OR `AT+STOP`
 
 **Recording-Specific Actions:**
@@ -2125,7 +2125,8 @@ Sent when recording state changes (start, stop, pause, resume). Uses `"event":"s
 {"event":"state","state":"RECORDING","session":"20240203100000"}
 ```
 
-**Trigger:** Recording starts (AT+START or button long press)
+**Trigger:** Persistent recording starts with `AT+START`; RTC streaming starts
+with `AT+START=rtc` or a button long press from IDLE.
 
 ```json
 {"event":"state","state":"IDLE","session":"20240203100000","duration":600}
@@ -2475,7 +2476,7 @@ The device has a single user button (GPIO1.15, active-low) with multi-level pres
 | Action | Trigger | Behavior |
 |--------|---------|----------|
 | Single Click | Press & release (< 1s) | Context-dependent (see below) |
-| Long Press | Hold > 1s | Start/stop recording, confirm with vibration |
+| Long Press | Hold > 1s | Start RTC streaming from IDLE or stop an active recording; confirm with vibration |
 | Long Press Level 1/2/3 | Continue holding > 2s/3s/4s | Power off screen (cancel on release) |
 | Release | Button released | Execute deferred action or power off |
 | Double Click | Two quick presses | Reserved (no action) |
@@ -2496,10 +2497,14 @@ The device has a single user button (GPIO1.15, active-low) with multi-level pres
 1. At 1s hold → Stop recording immediately + vibrate
 2. Continue holding → Enter power-off flow
 
-**Idle / Error / WiFi Sync:**
+**Idle:**
 1. At 1s hold → Vibrate to confirm threshold
 2. Continue holding → Enter power-off flow
-3. On release before power-off levels → Start recording
+3. On release before power-off levels → Request an RTC session
+4. RTC starts only when BLE is connected and File Data notify is enabled;
+   otherwise the device remains idle
+
+**Error / WiFi Sync:** Long press does not start a session.
 
 **Charging:** Power-off is blocked. Long press levels are ignored.
 
@@ -2515,7 +2520,7 @@ Button actions that change state send unsolicited notifications:
 
 | Action | Notification |
 |--------|-------------|
-| Start recording | `{"event":"state","state":"RECORDING",...}` |
+| Start RTC from button | `{"event":"state","state":"STREAMING",...}` |
 | Stop recording | `{"event":"state","state":"IDLE",...}` |
 | Add bookmark | `{"event":"mark","session":"...","mark_count":N}` |
 
