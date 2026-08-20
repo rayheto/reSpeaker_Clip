@@ -32,7 +32,6 @@ clip.terminal --transport ble --address AA:BB:CC:DD:EE:FF
 clip.sync --transport udp --all --output recordings
 clip.record --transport ble --mode enhanced --duration 60
 clip.stream --transport ble --address AA:BB:CC:DD:EE:FF
-clip.play --transport ble --address AA:BB:CC:DD:EE:FF
 clip.wifi --address AA:BB:CC:DD:EE:FF
 clip.web --transport udp
 ```
@@ -67,34 +66,6 @@ The source-checkout producer/consumer example has the same duration policy:
 ```sh
 python examples/demo_stream.py --address AA:BB:CC:DD:EE:FF
 ```
-
-**`clip.play`** is the live-playback *example* and needs the `play` **and**
-`ble` extras — it is BLE-only and `play` does not pull in `bleak`:
-
-```sh
-pip install -e '.[play,ble]'
-```
-
-```sh
-clip.play --transport ble --address AA:BB:CC:DD:EE:FF
-clip.play --transport ble --buffer-ms 200 --device 3 --wav
-clip.play --transport ble --duration 30 --simulate-playback
-```
-
-> **Playback is an example, not a demo setup:** the Clip has no echo
-> cancellation, so playing through speakers feeds the microphone and howls.
-> Output must go to **headphones**.
-
-`clip.play` decodes the stream and plays it through the sound card, paced by
-a jitter buffer that smooths the bursty BLE arrivals (`--buffer-ms` sets the
-depth, default 100 ms, `0` = pass-through; `--device` selects the output by
-index or name substring — list devices with `python -m sounddevice`). It
-keeps the same-session `.bin` capture; `--wav [PATH]` additionally decodes to
-a 16 kHz mono WAV file (`rtc-<session>.wav` by default), and
-`--simulate-playback` adds an offline jitter-buffer analysis after the run:
-it replays the recorded arrival times through the jitter-buffer model and
-prints underruns at several depths (it supplements live playback; the audio
-device is still required for playback itself).
 
 The Python API mirrors the CLI; see
 [docs/api.md](docs/api.md#consuming-stream-data) for the three ways to

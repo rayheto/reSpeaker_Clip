@@ -16,7 +16,6 @@ python -m pip install -e '.[ble]'
 | `clip.sync` | Download newest, selected, or all sessions; optional post-success delete |
 | `clip.record` | Start/stop a recording with optional duration and periodic bookmarks |
 | `clip.stream` | Live RTC audio streaming over BLE; `.bin` received-packet capture + stream diagnostics (streaming only) |
-| `clip.play` | EXAMPLE: live headphone playback of an RTC stream; optional WAV export and jitter simulation; requires the `play` extra |
 | `clip.web` | Local browser control panel; requires the `web` extra |
 | `clip.wifi` | BLE-to-Wi-Fi handoff using the host platform's native Wi-Fi tool |
 
@@ -33,7 +32,7 @@ clip.wifi --address AA:BB:CC:DD:EE:FF
 ```
 
 During SDK development, `python tools/terminal.py` (and the matching wrappers,
-including `stream.py` and `play.py`) run the exact same installed
+including `stream.py`) run the exact same installed
 implementation. The standalone producer/consumer example is
 `python examples/demo_stream.py --address AA:BB:CC:DD:EE:FF`. Both
 `clip.stream` and that example run until `Ctrl-C` when `--duration` is omitted.
@@ -55,27 +54,6 @@ recording and delete sessions.
 received-packet log — `rtc-<session>.bin.part` while streaming, atomically
 renamed to `rtc-<session>.bin` on a normal stream end. RTC streaming is
 BLE-only; the tool rejects `--transport udp` up front.
-
-`clip.play` is the separate playback EXAMPLE built on the same session.
-Install the `play` extra first:
-
-```sh
-python -m pip install -e '.[play,ble]'
-clip.play --transport ble --buffer-ms 200 --device 3 --wav
-clip.play --transport ble --duration 30 --simulate-playback
-```
-
-> **Playback is an example:** the Clip has no echo cancellation, so speaker
-> output feeds the microphone and howls. Output must go to **headphones**.
-
-`clip.play` paces playback through a jitter buffer (`--buffer-ms` depth,
-default 100 ms, `0` = pass-through; `--device` is an index or name substring,
-listed by `python -m sounddevice`) and keeps the same-session `.bin`
-capture. `--wav [PATH]` decodes to a 16 kHz mono WAV file
-(`rtc-<session>.wav` by default). `--simulate-playback` replays the run's
-arrival times through the jitter-buffer model after the run and prints an
-underrun table at several depths (it supplements live playback; the audio
-device is still required for playback itself).
 
 When `clip.web` starts with `--transport ble`, its **Switch transfer to Wi-Fi**
 button starts the device AP over BLE, automatically joins the host to it, and

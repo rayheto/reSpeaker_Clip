@@ -29,7 +29,6 @@ ble = ["bleak>=3.0"]
 web = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
 wifi = []
 dev = ["pytest>=8", "pytest-asyncio>=0.23"]
-play = ["sounddevice>=0.4.6", "opuslib>=2.0.0", "numpy>=1.26"]
 
 [project.scripts]
 clip-sdk = "clip.cli:main"
@@ -39,7 +38,6 @@ clip-sdk = "clip.cli:main"
 "clip.web" = "clip.tools.web:main"
 "clip.wifi" = "clip.tools.wifi:main"
 "clip.stream" = "clip.tools.stream:main"
-"clip.play" = "clip.tools.play:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/clip"]

@@ -19,7 +19,7 @@ ClipClient
             ├─ sequence-gap + arrival-timing accounting
             ├─ StreamCapture: received-packet .bin log (.part -> rename)
             ├─ StreamConsumer: bounded async chunk/stack push (live edge)
-            └─ clip.jitter.JitterBuffer pacing for the playback example
+            └─ clip.jitter.JitterBuffer available to application consumers
 
 BaseTransport
   ├─ BleTransport   optional bleak dependency; GATT notifications
@@ -48,12 +48,12 @@ explicitly — `StreamCapture` logs raw arrivals to a length-prefixed `.bin`
 newest data through a byte-budget async queue as 4 KB chunks / ~1 MB stacks,
 dropping the oldest undelivered chunks under backpressure (async-only
 callbacks, per-callback timeout, `wait_closed` lifecycle).  The handler slot
-is released through a lease token (atomic conditional detach).  For
-playback, `clip.jitter.JitterBuffer` decouples the bursty arrivals from the
-steady 20 ms consume rate (initial fill, underrun to silence, catch-up drops
-that bound latency to the live edge), and `simulate_playback()` replays
-recorded arrival gaps through the same model offline to size the buffer.
-Playback is an example: no echo cancellation, headphones required.
+is released through a lease token (atomic conditional detach).
+`clip.jitter.JitterBuffer` remains available to applications that need to
+decouple bursty arrivals from a steady 20 ms consume rate (initial fill,
+underrun handling and catch-up drops that bound latency to the live edge),
+and `simulate_playback()` replays recorded arrival gaps through the same
+model offline to size the buffer.
 
 For hosts that start on BLE, `clip.wifi.handoff_to_wifi()` provides an explicit
 control-plane/data-plane handoff: it sends `AT+WIFI=on` over BLE, joins the host

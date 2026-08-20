@@ -1,8 +1,8 @@
 """Stream live RTC audio from the Clip and save Opus frames to a file.
 
 Streaming is this tool's only job: it starts an RTC session, captures the
-arrival log and prints stream diagnostics. Live playback, WAV export and
-jitter simulation live in the separate ``clip.play`` example tool.
+arrival log and prints stream diagnostics. Playback and media rendering are
+left to applications consuming the captured Opus packets.
 
 The capture is a received-packet log: each frame is written as a 2-byte
 little-endian length followed by the raw Opus packet — a private log format,

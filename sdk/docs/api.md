@@ -262,20 +262,16 @@ clip.terminal --transport udp
 clip.sync --transport udp --all --output recordings
 clip.record --transport ble --duration 60
 clip.stream --transport ble --duration 30
-clip.play --transport ble --wav
 clip.web --transport udp
 ```
 
-For `clip.stream` and `clip.play`, `--duration` is optional; omitting it waits
-until `Ctrl-C` or a device-side stream end.
+For `clip.stream`, `--duration` is optional; omitting it waits until `Ctrl-C`
+or a device-side stream end.
 
 `clip-sdk command` is available for development and accepts only a single
 `AT+...` command string.  The installable `clip.terminal`, `clip.sync`,
-`clip.record`, `clip.stream`, `clip.play`, and `clip.wifi` tools use the
-same package API.  `clip.stream` only streams and captures; `clip.play` is
-the live-playback example and needs the `play` **and** `ble` extras
-(`pip install -e '.[play,ble]'` — the `play` extra does not pull in
-`bleak`, and the tool is BLE-only). The Clip has no echo cancellation, so
-its output must go to headphones (speaker output howls).
+`clip.record`, `clip.stream`, and `clip.wifi` tools use the same package API.
+`clip.stream` only streams and captures; applications can consume the raw
+Opus packets through the public streaming API.
 `clip.web` adds a local browser panel when installed with the `web` extra;
 use the typed methods for production code.
