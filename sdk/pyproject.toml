@@ -29,6 +29,7 @@ ble = ["bleak>=3.0"]
 web = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
 wifi = []
 dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+examples = ["opuslib>=2.0.0", "numpy>=1.26"]
 
 [project.scripts]
 clip-sdk = "clip.cli:main"
